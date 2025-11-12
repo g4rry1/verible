@@ -43,6 +43,7 @@
 #include "verible/verilog/formatting/format-style-init.h"
 #include "verible/verilog/formatting/format-style.h"
 #include "verible/verilog/formatting/formatter.h"
+#include <slang/driver/Driver.h>
 
 #ifdef _WIN32
 #include <fcntl.h>

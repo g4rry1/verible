@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/rewriter.dir/rewriter.cpp.o -o ../../bin/rewriter  -Wl,-rpath,/home/dmitrii/visetog/verible/third_party/slang/build-system/lib ../../lib/libsvlang.so.9.1.150 ../../lib/libfmt.a ../../lib/libmimalloc.a -lpthread -lrt -latomic 

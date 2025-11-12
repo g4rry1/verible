@@ -1,0 +1,10 @@
+prefix=/usr/local
+includedir="${prefix}/include"
+libdir="${prefix}/lib"
+
+Name: slang
+Description: SystemVerilog compiler and language services
+URL: https://sv-lang.com/
+Version: 9.1.150
+Cflags: -I"${includedir}"
+Libs: -L"${libdir}" -lsvlang

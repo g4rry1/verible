@@ -10,7 +10,7 @@ build --enable_platform_specific_config
 build --workspace_status_command="bash bazel/build-version.sh"
 
 # Systems with gcc or clang
-common:unix    --cxxopt=-xc++ --host_cxxopt=-xc++ --cxxopt=-std=c++17 --host_cxxopt=-std=c++17 --client_env=BAZEL_CXXOPTS=-std=c++17
+common:unix    --cxxopt=-xc++ --host_cxxopt=-xc++ --cxxopt=-std=c++20 --host_cxxopt=-std=c++20 --client_env=BAZEL_CXXOPTS=-std=c++20
 common:linux   --config=unix
 common:freebsd --config=unix --linkopt=-lm --host_linkopt=-lm
 common:openbsd --config=unix --linkopt=-lm --host_linkopt=-lm
@@ -51,3 +51,8 @@ build:asan --linkopt -fsanitize=address
 build:create_static_linked_executables --linkopt=-fuse-ld=bfd --features=-supports_start_end_lib --//bazel:create_static_linked_executables
 
 try-import %workspace%/user.bazelrc
+
+build --copt=-I/usr/local/include
+build --linkopt=-L/usr/local/lib
+build --linkopt=-lsvlang
+build --linkopt=-lfmt

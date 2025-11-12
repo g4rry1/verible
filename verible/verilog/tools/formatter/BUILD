@@ -17,6 +17,7 @@ cc_binary(
     features = STATIC_EXECUTABLES_FEATURE,
     visibility = ["//visibility:public"],  # for verilog_style_lint.bzl
     deps = [
+        "//third_party/slang:slang",
         "//verible/common/strings:position",
         "//verible/common/util:file-util",
         "//verible/common/util:init-command-line",
