@@ -77,7 +77,7 @@ absl::Status FormatVerilog(std::string_view text, std::string_view filename,
                            const FormatStyle &style,
                            std::ostream &formatted_stream,
                            const verible::LineNumberSet &lines = {},
-                           const ExecutionControl &control = {});
+                           const ExecutionControl &control = {}, int argc = 0, char** argv = nullptr);
 // Ditto, but with TextStructureView as input and std::string as output.
 // This does verification of the resulting format, but _no_ convergence test.
 absl::Status FormatVerilog(const verible::TextStructureView &text_structure,

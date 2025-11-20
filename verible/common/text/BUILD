@@ -282,7 +282,9 @@ cc_test(
 cc_library(
     name = "text-structure",
     srcs = ["text-structure.cc"],
-    hdrs = ["text-structure.h"],
+    hdrs = ["text-structure.h",
+            "verilog-nonterminals.h",
+            "verilog-token-enum.h"],
     deps = [
         ":concrete-syntax-leaf",
         ":concrete-syntax-tree",

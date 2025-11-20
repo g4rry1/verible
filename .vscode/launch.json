@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug verible-verilog-format",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/bazel-bin/verible/verilog/tools/formatter/verible-verilog-format",
+      "args": ["${workspaceFolder}/test.sv"],
+      "cwd": "${workspaceFolder}",
+      "MIMode": "gdb",
+      "env": {
+        "TEST_TMPDIR": "/tmp",
+        "TMPDIR": "/tmp"
+      },
+      "externalConsole": false
+    }
+  ]
+}
+

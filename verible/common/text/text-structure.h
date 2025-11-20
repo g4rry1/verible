@@ -41,6 +41,14 @@
 #include "verible/common/text/token-stream-view.h"
 #include "verible/common/text/tree-utils.h"
 
+#include <slang/driver/Driver.h>
+#include <slang/syntax/SyntaxPrinter.h>
+#include "slang/parsing/ParserMetadata.h"
+#include "slang/syntax/AllSyntax.h"
+#include "slang/syntax/SyntaxTree.h"
+#include "slang/text/SourceLocation.h"
+#include "slang/text/SourceManager.h"
+
 namespace verilog {
 class VerilogPreprocess;
 }  // namespace verilog
@@ -70,10 +78,12 @@ class TextStructureView {
   // NodeExpansionMap is a map of offsets to substring analysis results
   // that are to be expanded.  The rationale is that it is more efficient to
   // collect expansions and process them in bulk rather than as each
-  // expansion is encountered.
+  // expansion is encountered. 
   using NodeExpansionMap = std::map<int, DeferredExpansion>;
 
   explicit TextStructureView(std::string_view contents);
+
+  explicit TextStructureView(std::string_view contents, std::shared_ptr<slang::syntax::SyntaxTree> tree, slang::SourceManager &sm);
 
   ~TextStructureView();
 
@@ -180,7 +190,7 @@ class TextStructureView {
   // This is required for calculating byte offsets to substrings contained
   // within this structure.  Pass this (via Contents()) to TokenInfo::left() and
   // TokenInfo::right() to calculate byte offsets, useful for diagnostics.
-  std::string_view contents_;
+  std::string_view contents_; //this
 
   // TODO(hzeller): These lazily generated elements are good candidates
   // for breaking out into their own abstraction.
@@ -200,17 +210,17 @@ class TextStructureView {
 
   // Tokens that constitute the original file (contents_).
   // This should always be terminated with a sentinel EOF token.
-  TokenSequence tokens_;
+  TokenSequence tokens_; //this
 
   // Possibly modified view of the tokens_ token sequence.
-  TokenStreamView tokens_view_;
+  TokenStreamView tokens_view_; //this
 
   // Index of token iterators that mark the beginnings of each line.
   // Lazily calculated on request.
   mutable std::vector<TokenSequence::const_iterator> lazy_line_token_map_;
 
   // Tree representation of file contents.
-  ConcreteSyntaxTree syntax_tree_;
+  ConcreteSyntaxTree syntax_tree_; //this 
 
   void TrimSyntaxTree(int first_token_offset, int last_token_offset);
 

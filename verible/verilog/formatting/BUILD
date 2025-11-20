@@ -135,6 +135,7 @@ cc_library(
         "formatter.h",
     ],
     deps = [
+        "//third_party/slang:slang",
         ":align",
         ":comment-controls",
         ":format-style",

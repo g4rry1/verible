@@ -43,13 +43,11 @@
 #include "verible/verilog/formatting/format-style-init.h"
 #include "verible/verilog/formatting/format-style.h"
 #include "verible/verilog/formatting/formatter.h"
-#include <slang/driver/Driver.h>
 
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
 #endif
-
 using absl::StatusCode;
 using verible::LineNumberSet;
 using verilog::formatter::ExecutionControl;
@@ -138,7 +136,7 @@ static std::ostream &FileMsg(std::string_view filename) {
 // TODO: Refactor and simplify
 static bool formatOneFile(std::string_view filename,
                           const LineNumberSet &lines_to_format,
-                          bool *any_changes) {
+                          bool *any_changes, int argc, char** argv) {
   const bool inplace = absl::GetFlag(FLAGS_inplace);
   const bool check_changes_only = absl::GetFlag(FLAGS_verify);
   const bool is_stdin = verible::file::IsStdin(filename);
@@ -189,7 +187,7 @@ static bool formatOneFile(std::string_view filename,
   std::ostringstream stream;
   const auto format_status =
       FormatVerilog(*content_or, diagnostic_filename, format_style, stream,
-                    lines_to_format, formatter_control);
+                    lines_to_format, formatter_control, argc, argv);
 
   const std::string &formatted_output(stream.str());
   if (!format_status.ok()) {
@@ -296,7 +294,7 @@ int main(int argc, char **argv) {
   // All positional arguments are file names.  Exclude program name.
   for (const std::string_view filename :
        verible::make_range(file_args.begin() + 1, file_args.end())) {
-    all_success &= formatOneFile(filename, lines_to_format, &any_changes);
+    all_success &= formatOneFile(filename, lines_to_format, &any_changes, argc, argv);
   }
 
   int ret_val = 0;

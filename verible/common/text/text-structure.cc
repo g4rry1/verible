@@ -41,6 +41,8 @@
 #include "verible/common/util/logging.h"
 #include "verible/common/util/range.h"
 #include "verible/common/util/status-macros.h"
+#include "verilog-nonterminals.h"
+#include "verilog-token-enum.h"
 
 namespace verible {
 
@@ -53,6 +55,323 @@ TextStructureView::TextStructureView(std::string_view contents)
   CHECK(status.ok())
       << "Failed internal iterator/string_view consistency check in ctor:\n  "
       << status.message();
+}
+
+
+void take_all_tokens(slang::syntax::SyntaxNode& root_slang, 
+                     std::vector<slang::parsing::Token> &tokens_container);
+
+
+void special_case_handling(slang::syntax::SyntaxNode& root_slang, 
+                           verible::SyntaxTreeNode &root_verible,
+   std::string_view contents, std::vector<TokenInfo> &tokens_);
+
+void find_trivia(slang::parsing::Trivia trivia, 
+                 verible::SyntaxTreeNode &root_verible, 
+                 slang::SourceManager &sm, std::string_view contents, std::vector<TokenInfo> &tokens);
+
+verible::SyntaxTreeNode& find_tokens(slang::syntax::SyntaxNode& root_slang, 
+                                     verible::SyntaxTreeNode& root_verible, 
+                                     slang::SourceManager &sm, std::string_view contents, std::vector<TokenInfo> &tokens);
+
+std::unique_ptr<verible::SyntaxTreeNode> tree_transformation_from_slang_to_verible(
+    std::shared_ptr<slang::syntax::SyntaxTree> tree, 
+    slang::SourceManager &sm, std::string_view contents, std::vector<TokenInfo> &tokens);
+
+
+/*нужна особая обработка случая ImplicitAnsiPort, у сланга и у верибла разные структуры*/
+
+
+/*node tag: 2         node : CompilationUnit                         
+node tag: 48          node : SyntaxList  node : ModuleDeclaration
+node tag: 49          node : SyntaxList node : ModuleHeader
+token tag: 360        token : ModuleKeyword
+token tag: 293        token : Identifier
+node tag: 65          node : SyntaxList  node : AnsiPortList
+token tag: 40         token : OpenParenthesis
+node tag: 290         node : SeparatedList  
+
+//особая обработка ImplicitAnsiPort
+node tag: 291   kPortDeclaration     node :ImplicitAnsiPort  node : SyntaxList  node : VariablePortHeader
+token tag: 354  TK_input             token : InputKeyword
+node tag: 128   kDataType            node : ImplicitType
+node tag: 47    kUnqualifiedId       node : SyntaxList token : Placeholder node : Declarator 
+token tag: 293  SymbolIdentifier     token : Identifier
+node tag: 266   kUnpackedDimensions  вычислить самому 
+        
+token tag: 44        node : SyntaxList token : Comma
+
+
+//особая обработка ImplicitAnsiPort     если нет input или output то node : ImplicitType уходит в никуда
+node tag: 103  kPort                node : ImplicitAnsiPort node : SyntaxList node : VariablePortHeader
+node tag: 106  kPortReference       node : ImplicitType 
+node tag: 47   kUnqualifiedId       node : SyntaxList token : Placeholder node : Declarator //тут остановился
+token tag: 293 SymbolIdentifier     token : Identifier
+
+token tag: 44        node : SyntaxList  token : Comma
+
+
+//особая обработка ImplicitAnsiPort
+node tag: 291       node : ImplicitAnsiPort   node : SyntaxList  node : VariablePortHeader
+token tag: 370      token : OutputKeyword
+node tag: 128       node : ImplicitType
+node tag: 47        node : SyntaxList token : Placeholder node : Declarator
+token tag: 293      token : Identifier
+node tag: 266       вычислить самому
+
+
+token tag: 41       node : SyntaxList   token : CloseParenthesis
+token tag: 59       token : Semicolon
+
+
+node tag: 292  kModuleItemList      node : SyntaxList
+token tag: 337 TK_endmodule         token : EndModuleKeyword
+node tag: 257  kLabel               node : NamedBlockClause
+token tag: 58                       token : Colon
+token tag: 293 SymbolIdentifier     token : Identifier    token : EndOfFile
+*/
+
+
+static std::unordered_map<slang::syntax::SyntaxKind, verilog::NodeEnum> node_slang_to_verible = {
+    {slang::syntax::SyntaxKind::CompilationUnit, verilog::NodeEnum::kDescriptionList},
+    {slang::syntax::SyntaxKind::ModuleDeclaration, verilog::NodeEnum::kModuleDeclaration},
+    {slang::syntax::SyntaxKind::ModuleHeader, verilog::NodeEnum::kModuleHeader},
+    {slang::syntax::SyntaxKind::AnsiPortList, verilog::NodeEnum::kParenGroup},
+    {slang::syntax::SyntaxKind::SeparatedList, verilog::NodeEnum::kPortDeclarationList},
+    {slang::syntax::SyntaxKind::Declarator, verilog::NodeEnum::kUnqualifiedId},
+    {slang::syntax::SyntaxKind::NamedBlockClause, verilog::NodeEnum::kLabel},   
+};
+
+static std::unordered_map<slang::parsing::TokenKind, int> token_slang_to_verible = {
+    {slang::parsing::TokenKind::ModuleKeyword, verilog_tokentype::TK_module},
+    {slang::parsing::TokenKind::Identifier, verilog_tokentype::SymbolIdentifier},
+    {slang::parsing::TokenKind::OpenParenthesis, 40},
+    {slang::parsing::TokenKind::CloseParenthesis, 41},
+    {slang::parsing::TokenKind::InputKeyword, verilog_tokentype::TK_input},
+    {slang::parsing::TokenKind::OutputKeyword, verilog_tokentype::TK_output},
+    {slang::parsing::TokenKind::Comma, 44},
+    {slang::parsing::TokenKind::Semicolon, 59},
+    {slang::parsing::TokenKind::EndModuleKeyword, verilog_tokentype::TK_endmodule},
+    {slang::parsing::TokenKind::Colon, 58},
+};
+
+
+
+void take_all_tokens(slang::syntax::SyntaxNode& root_slang, std::vector<slang::parsing::Token> &tokens_container){
+    slang::size_t count_child = root_slang.getChildCount();
+    for (slang::size_t i = 0; i < count_child; i++) {
+
+        if (auto childNode = root_slang.childNode(i); childNode) {
+            take_all_tokens(*childNode, tokens_container);
+        }
+        else if (auto token = root_slang.childToken(i); token) {
+            if(!(token.kind == slang::parsing::TokenKind::Placeholder || token.kind == slang::parsing::TokenKind::EndOfFile)){
+                tokens_container.push_back(token);
+            }
+        }
+    }
+}
+
+void special_case_handling(slang::syntax::SyntaxNode& root_slang, verible::SyntaxTreeNode &root_verible,
+   std::string_view contents, std::vector<TokenInfo> &tokens_){
+    if(root_slang.kind == slang::syntax::SyntaxKind::ImplicitAnsiPort){
+      std::vector<slang::parsing::Token> tokens;
+      take_all_tokens(root_slang,tokens);
+      auto input_or_output = std::find_if(tokens.begin(), tokens.end(), 
+                           [&](const slang::parsing::Token& elem){ 
+                               return elem.kind == slang::parsing::TokenKind::InputKeyword
+                               || elem.kind == slang::parsing::TokenKind::OutputKeyword; 
+                           });
+      if(input_or_output != tokens.end()){
+        auto new_node = std::make_unique<verible::SyntaxTreeNode>((int)verilog::NodeEnum::kPortDeclaration);
+        //std::cerr << "node " << new_node->Tag().tag << "\n";
+        auto tag = token_slang_to_verible.find(input_or_output->kind) -> second;
+        
+        auto start = input_or_output->location().offset();
+        auto len   = input_or_output->rawText().size();
+        std::string_view sv(contents.data() + start, len);
+
+        auto token_info = TokenInfo(tag, sv);
+        tokens_.push_back(token_info);        
+        new_node->AppendChild(std::make_unique<verible::SyntaxTreeLeaf>(token_info));
+        //std::cerr << "token " << tag << "\n";
+        new_node->AppendChild(std::make_unique<verible::SyntaxTreeNode>((int)verilog::NodeEnum::kDataType));
+        //std::cerr << "node " << (int)verilog::NodeEnum::kDataType << "\n";
+        
+        auto identifier = tokens[1];
+        auto start2 = identifier.location().offset();
+        auto len2   = identifier.rawText().size();
+        std::string_view sv2(contents.data() + start2, len2);
+
+        auto tok_info = TokenInfo(verilog_tokentype::SymbolIdentifier, sv2);
+        tokens_.push_back(tok_info); 
+        auto new_nod = std::make_unique<verible::SyntaxTreeNode>((int)verilog::NodeEnum::kUnqualifiedId);
+        new_nod->AppendChild(std::make_unique<verible::SyntaxTreeLeaf>(tok_info));
+        //std::cerr << "node " << new_nod->Tag().tag << "\n";
+        //std::cerr << "token " << (int)verilog_tokentype::SymbolIdentifier << "\n";
+        
+        new_node->AppendChild(std::move(new_nod));
+        new_node->AppendChild(std::make_unique<verible::SyntaxTreeNode>((int)verilog::NodeEnum::kUnpackedDimensions));
+        //std::cerr << "node " << (int)verilog::NodeEnum::kUnpackedDimensions << "\n";
+        
+        root_verible.AppendChild(std::move(new_node));
+      }
+      else{
+        auto new_node = std::make_unique<verible::SyntaxTreeNode>((int)verilog::NodeEnum::kPort);
+        //std::cerr << "node " << new_node->Tag().tag << "\n";
+        auto new_nod = std::make_unique<verible::SyntaxTreeNode>((int)verilog::NodeEnum::kPortReference);
+        //std::cerr << "node " << new_nod->Tag().tag << "\n";
+        
+        auto identifier = tokens[0];
+        auto start = identifier.location().offset();
+        auto len   = identifier.rawText().size();
+        std::string_view sv2(contents.data() + start, len);
+
+        auto tok_info = TokenInfo(verilog_tokentype::SymbolIdentifier, sv2);
+        tokens_.push_back(tok_info); 
+        auto new_n = std::make_unique<verible::SyntaxTreeNode>((int)verilog::NodeEnum::kUnqualifiedId);
+        //std::cerr << "node " << new_n->Tag().tag << "\n";
+        new_n->AppendChild(std::make_unique<verible::SyntaxTreeLeaf>(tok_info));
+        //std::cerr << "token " << (int)verilog_tokentype::SymbolIdentifier << "\n";
+        
+        new_nod->AppendChild(std::move(new_n));
+        new_node->AppendChild(std::move(new_nod));
+        root_verible.AppendChild(std::move(new_node));
+      }
+    }
+}
+
+
+//using slang parcer
+TextStructureView::TextStructureView(std::string_view contents, std::shared_ptr<slang::syntax::SyntaxTree> tree, slang::SourceManager &sm)
+  : contents_(contents){
+    std::vector<TokenInfo> tokens;
+    syntax_tree_ =  tree_transformation_from_slang_to_verible(tree, sm, contents_,tokens);
+    tokens.push_back(EOFToken());
+    tokens_ = tokens;
+    
+    tokens_view_.reserve(tokens_.size());
+    for (auto it = tokens_.cbegin(); it != tokens_.cend(); ++it) {
+        tokens_view_.push_back(it);
+    }
+}
+
+
+void find_trivia(slang::parsing::Trivia trivia, verible::SyntaxTreeNode &root_verible,
+   slang::SourceManager &sm, std::string_view contents, std::vector<TokenInfo> &tokens){
+    if (trivia.kind == slang::parsing::TriviaKind::LineComment || trivia.kind == slang::parsing::TriviaKind::BlockComment) {
+                
+    }
+    if(trivia.kind == slang::parsing::TriviaKind::Directive) {
+        auto& syntax = *trivia.syntax();
+        find_tokens(syntax, root_verible, sm, contents,tokens);
+    }
+    if(trivia.kind == slang::parsing::TriviaKind::SkippedSyntax){
+        find_tokens(*trivia.syntax(), root_verible, sm, contents, tokens);
+    }
+    if(trivia.kind == slang::parsing::TriviaKind::SkippedTokens){
+                        
+      for (slang::parsing::Token t : trivia.getSkippedTokens()){
+      }
+    }
+    if(trivia.kind == slang::parsing::TriviaKind::DisabledText){
+    }
+}
+
+
+verible::SyntaxTreeNode& find_tokens(slang::syntax::SyntaxNode& root_slang, verible::SyntaxTreeNode& root_verible,
+   slang::SourceManager &sm, std::string_view contents, std::vector<TokenInfo> &tokens) {
+
+    verible::SyntaxTreeNode* new_node = &root_verible;
+
+
+    if(root_slang.kind != slang::syntax::SyntaxKind::SyntaxList){
+      auto find_in_table = node_slang_to_verible.find(root_slang.kind);
+      if(find_in_table != node_slang_to_verible.end()){
+        auto tag = find_in_table->second;
+        auto new_node_ptr = std::make_unique<verible::SyntaxTreeNode>((int)tag);
+        verible::SyntaxTreeNode& new_node_ref = *new_node_ptr;
+        root_verible.AppendChild(std::move(new_node_ptr));
+        new_node = &new_node_ref;
+        //std::cerr << "node " << new_node->Tag().tag << "\n";
+      }
+      else{
+        special_case_handling(root_slang,root_verible,contents,tokens);
+        return *new_node;
+      }
+    }
+
+    slang::size_t count_child = root_slang.getChildCount();
+   
+    for (slang::size_t i = 0; i < count_child; i++) {
+
+
+        if (auto childNode = root_slang.childNode(i); childNode) {
+            find_tokens(*childNode,*new_node, sm, contents, tokens);
+        }
+        else if (auto token = root_slang.childToken(i); token) {
+            if(sm.isIncludedFileLoc(token.location())){
+                continue;
+            }
+
+            slang::SmallVector<const slang::parsing::Trivia*> pending;
+            for (const auto& trivia : token.trivia()) {
+                pending.push_back(&trivia);
+                auto loc = trivia.getExplicitLocation();
+                if (loc) {
+                    if (!sm.isIncludedFileLoc(*loc)) {
+                        for (auto t : pending)
+                            find_trivia(*t, *new_node, sm, contents, tokens);
+                    }
+                    else {
+                        if (trivia.kind == slang::parsing::TriviaKind::Directive ||
+                            trivia.kind == slang::parsing::TriviaKind::SkippedSyntax ||
+                            trivia.kind == slang::parsing::TriviaKind::SkippedTokens) {
+                            find_trivia(trivia, *new_node,sm, contents, tokens);
+                        }
+                    }
+                    pending.clear();
+                }
+            }
+
+            for (auto t : pending){
+                find_trivia(*t, *new_node, sm, contents, tokens);
+            }
+            if(sm.isMacroLoc(token.location())){
+                continue;
+            }
+            //костыль
+            if(token.kind == slang::parsing::TokenKind::EndModuleKeyword){
+              root_verible.AppendChild(std::make_unique<verible::SyntaxTreeNode>((int)verilog::NodeEnum::kModuleItemList));
+              //std::cerr << "node " << (int)verilog::NodeEnum::kModuleItemList << "\n";
+            }
+            if(token.kind == slang::parsing::TokenKind::EndOfFile){
+              continue;
+            }
+
+            auto find_in_table = token_slang_to_verible.find(token.kind);
+            if(find_in_table != token_slang_to_verible.end()){
+
+                auto tag = find_in_table->second;
+                auto start = token.location().offset();
+                auto length = token.rawText().size();
+                std::string_view sv(contents.data() + start, length);
+                auto token_info = TokenInfo(tag,sv);
+                new_node->AppendChild(std::make_unique<verible::SyntaxTreeLeaf>(token_info));
+                tokens.push_back(token_info);
+                //std::cerr << "token " << tag << "\n";
+            }
+        }
+    }
+    return *new_node;
+}
+
+
+std::unique_ptr<verible::SyntaxTreeNode> tree_transformation_from_slang_to_verible(std::shared_ptr<slang::syntax::SyntaxTree> tree,
+   slang::SourceManager &sm, std::string_view contents, std::vector<TokenInfo> &tokens){
+  auto root_verible = std::make_unique<verible::SyntaxTreeNode>();
+  auto& child_node = find_tokens(tree->root(), *root_verible, sm, contents, tokens);
+  return std::make_unique<verible::SyntaxTreeNode>(std::move(child_node));
 }
 
 TextStructureView::~TextStructureView() {

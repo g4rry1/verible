@@ -67,6 +67,15 @@
 #include "verible/verilog/parser/verilog-token-enum.h"
 #include "verible/verilog/preprocessor/verilog-preprocess.h"
 
+#include <slang/driver/Driver.h>
+#include <slang/syntax/SyntaxPrinter.h>
+#include "slang/parsing/ParserMetadata.h"
+#include "slang/syntax/AllSyntax.h"
+#include "slang/syntax/SyntaxTree.h"
+#include "slang/text/SourceLocation.h"
+#include "slang/text/SourceManager.h"
+#include "verible/common/text/text-structure.h"
+
 namespace verilog {
 namespace formatter {
 using absl::Status;
@@ -81,6 +90,7 @@ using verible::TreeViewNodeInfo;
 using verible::UnwrappedLine;
 using verible::VectorTree;
 using verible::VectorTreeLeavesIterator;
+using verible::TextStructureView;
 
 using partition_node_type = VectorTree<TreeViewNodeInfo<TokenPartitionTree>>;
 
@@ -273,14 +283,29 @@ absl::Status FormatVerilog(const verible::TextStructureView &text_structure,
   return format_status;
 }
 
+//this
 Status FormatVerilog(std::string_view text, std::string_view filename,
                      const FormatStyle &style, std::ostream &formatted_stream,
                      const LineNumberSet &lines,
-                     const ExecutionControl &control) {
-  const auto analyzer = ParseWithStatus(text, filename);
-  if (!analyzer.ok()) return analyzer.status();
+                     const ExecutionControl &control, int argc, char** argv) {
+  //const auto analyzer = ParseWithStatus(text, filename);
+  //if (!analyzer.ok()) return analyzer.status();
 
-  const verible::TextStructureView &text_structure = analyzer->get()->Data();
+  slang::driver::Driver driver;
+  driver.addStandardArgs();
+  driver.parseCommandLine(argc, argv);
+  driver.parseAllSources();
+
+  //const verible::TextStructureView &text_structure = analyzer->get()->Data();
+
+  auto buffers = driver.sourceManager.getAllBuffers();
+  if(buffers.size() != 1){
+    return absl::InvalidArgumentError("many buffers");
+  }
+
+  const verible::TextStructureView &text_structure = TextStructureView(driver.sourceManager.getSourceText(buffers[0])
+  , driver.syntaxTrees.back(), driver.sourceManager);
+  
   std::string formatted_text;
   Status format_status = FormatVerilog(text_structure, filename, style,
                                        &formatted_text, lines, control);
@@ -291,6 +316,7 @@ Status FormatVerilog(std::string_view text, std::string_view filename,
   // When formatting whole-file (no --lines are specified), ensure that
   // the formatting transformation is convergent after one iteration.
   //   format(format(text)) == format(text)
+  /*
   if (control.verify_convergence) {
     std::ostringstream reformat_stream;
     if (auto reformat_status =
@@ -303,6 +329,7 @@ Status FormatVerilog(std::string_view text, std::string_view filename,
     return verible::ReformatMustMatch(text, lines, formatted_text,
                                       reformatted_text);
   }
+                                      */
   return format_status;
 }
 
