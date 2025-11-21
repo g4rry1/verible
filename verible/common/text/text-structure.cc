@@ -46,18 +46,6 @@
 
 namespace verible {
 
-TextStructureView::TextStructureView(std::string_view contents)
-    : contents_(contents) {
-  // more than sufficient memory as number-of-tokens <= bytes-in-file,
-  // push_back() should never re-alloc because size <= initial capacity.
-  tokens_.reserve(contents.length());
-  const absl::Status status = InternalConsistencyCheck();
-  CHECK(status.ok())
-      << "Failed internal iterator/string_view consistency check in ctor:\n  "
-      << status.message();
-}
-
-
 void take_all_tokens(slang::syntax::SyntaxNode& root_slang, 
                      std::vector<slang::parsing::Token> &tokens_container);
 
@@ -66,11 +54,11 @@ void special_case_handling(slang::syntax::SyntaxNode& root_slang,
                            verible::SyntaxTreeNode &root_verible,
    std::string_view contents, std::vector<TokenInfo> &tokens_);
 
-void find_trivia(slang::parsing::Trivia trivia, 
+void trivia_visit(slang::parsing::Trivia trivia, 
                  verible::SyntaxTreeNode &root_verible, 
                  slang::SourceManager &sm, std::string_view contents, std::vector<TokenInfo> &tokens);
 
-verible::SyntaxTreeNode& find_tokens(slang::syntax::SyntaxNode& root_slang, 
+verible::SyntaxTreeNode& tree_visit(slang::syntax::SyntaxNode& root_slang, 
                                      verible::SyntaxTreeNode& root_verible, 
                                      slang::SourceManager &sm, std::string_view contents, std::vector<TokenInfo> &tokens);
 
@@ -242,32 +230,17 @@ void special_case_handling(slang::syntax::SyntaxNode& root_slang, verible::Synta
 }
 
 
-//using slang parcer
-TextStructureView::TextStructureView(std::string_view contents, std::shared_ptr<slang::syntax::SyntaxTree> tree, slang::SourceManager &sm)
-  : contents_(contents){
-    std::vector<TokenInfo> tokens;
-    syntax_tree_ =  tree_transformation_from_slang_to_verible(tree, sm, contents_,tokens);
-    tokens.push_back(EOFToken());
-    tokens_ = tokens;
-    
-    tokens_view_.reserve(tokens_.size());
-    for (auto it = tokens_.cbegin(); it != tokens_.cend(); ++it) {
-        tokens_view_.push_back(it);
-    }
-}
-
-
-void find_trivia(slang::parsing::Trivia trivia, verible::SyntaxTreeNode &root_verible,
+void trivia_visit(slang::parsing::Trivia trivia, verible::SyntaxTreeNode &root_verible,
    slang::SourceManager &sm, std::string_view contents, std::vector<TokenInfo> &tokens){
     if (trivia.kind == slang::parsing::TriviaKind::LineComment || trivia.kind == slang::parsing::TriviaKind::BlockComment) {
                 
     }
     if(trivia.kind == slang::parsing::TriviaKind::Directive) {
         auto& syntax = *trivia.syntax();
-        find_tokens(syntax, root_verible, sm, contents,tokens);
+        tree_visit(syntax, root_verible, sm, contents,tokens);
     }
     if(trivia.kind == slang::parsing::TriviaKind::SkippedSyntax){
-        find_tokens(*trivia.syntax(), root_verible, sm, contents, tokens);
+        tree_visit(*trivia.syntax(), root_verible, sm, contents, tokens);
     }
     if(trivia.kind == slang::parsing::TriviaKind::SkippedTokens){
                         
@@ -279,7 +252,7 @@ void find_trivia(slang::parsing::Trivia trivia, verible::SyntaxTreeNode &root_ve
 }
 
 
-verible::SyntaxTreeNode& find_tokens(slang::syntax::SyntaxNode& root_slang, verible::SyntaxTreeNode& root_verible,
+verible::SyntaxTreeNode& tree_visit(slang::syntax::SyntaxNode& root_slang, verible::SyntaxTreeNode& root_verible,
    slang::SourceManager &sm, std::string_view contents, std::vector<TokenInfo> &tokens) {
 
     verible::SyntaxTreeNode* new_node = &root_verible;
@@ -307,7 +280,7 @@ verible::SyntaxTreeNode& find_tokens(slang::syntax::SyntaxNode& root_slang, veri
 
 
         if (auto childNode = root_slang.childNode(i); childNode) {
-            find_tokens(*childNode,*new_node, sm, contents, tokens);
+            tree_visit(*childNode,*new_node, sm, contents, tokens);
         }
         else if (auto token = root_slang.childToken(i); token) {
             if(sm.isIncludedFileLoc(token.location())){
@@ -321,13 +294,13 @@ verible::SyntaxTreeNode& find_tokens(slang::syntax::SyntaxNode& root_slang, veri
                 if (loc) {
                     if (!sm.isIncludedFileLoc(*loc)) {
                         for (auto t : pending)
-                            find_trivia(*t, *new_node, sm, contents, tokens);
+                            trivia_visit(*t, *new_node, sm, contents, tokens);
                     }
                     else {
                         if (trivia.kind == slang::parsing::TriviaKind::Directive ||
                             trivia.kind == slang::parsing::TriviaKind::SkippedSyntax ||
                             trivia.kind == slang::parsing::TriviaKind::SkippedTokens) {
-                            find_trivia(trivia, *new_node,sm, contents, tokens);
+                            trivia_visit(trivia, *new_node,sm, contents, tokens);
                         }
                     }
                     pending.clear();
@@ -335,7 +308,7 @@ verible::SyntaxTreeNode& find_tokens(slang::syntax::SyntaxNode& root_slang, veri
             }
 
             for (auto t : pending){
-                find_trivia(*t, *new_node, sm, contents, tokens);
+                trivia_visit(*t, *new_node, sm, contents, tokens);
             }
             if(sm.isMacroLoc(token.location())){
                 continue;
@@ -370,8 +343,34 @@ verible::SyntaxTreeNode& find_tokens(slang::syntax::SyntaxNode& root_slang, veri
 std::unique_ptr<verible::SyntaxTreeNode> tree_transformation_from_slang_to_verible(std::shared_ptr<slang::syntax::SyntaxTree> tree,
    slang::SourceManager &sm, std::string_view contents, std::vector<TokenInfo> &tokens){
   auto root_verible = std::make_unique<verible::SyntaxTreeNode>();
-  auto& child_node = find_tokens(tree->root(), *root_verible, sm, contents, tokens);
+  auto& child_node = tree_visit(tree->root(), *root_verible, sm, contents, tokens);
   return std::make_unique<verible::SyntaxTreeNode>(std::move(child_node));
+}
+
+TextStructureView::TextStructureView(std::string_view contents)
+    : contents_(contents) {
+  // more than sufficient memory as number-of-tokens <= bytes-in-file,
+  // push_back() should never re-alloc because size <= initial capacity.
+  tokens_.reserve(contents.length());
+  const absl::Status status = InternalConsistencyCheck();
+  CHECK(status.ok())
+      << "Failed internal iterator/string_view consistency check in ctor:\n  "
+      << status.message();
+}
+
+
+//using slang parcer
+TextStructureView::TextStructureView(std::string_view contents, std::shared_ptr<slang::syntax::SyntaxTree> tree, slang::SourceManager &sm)
+  : contents_(contents){
+    std::vector<TokenInfo> tokens;
+    syntax_tree_ =  tree_transformation_from_slang_to_verible(tree, sm, contents_,tokens);
+    tokens.push_back(EOFToken());
+    tokens_ = tokens;
+    
+    tokens_view_.reserve(tokens_.size());
+    for (auto it = tokens_.cbegin(); it != tokens_.cend(); ++it) {
+        tokens_view_.push_back(it);
+    }
 }
 
 TextStructureView::~TextStructureView() {
