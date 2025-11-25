@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/slang_hier.dir/hier.cpp.o -o ../../bin/slang-hier  -Wl,-rpath,/home/dmitrii/visetog/verible/third_party/slang/build/lib: ../../lib/libsvlang.so.9.1.150 ../../lib/libfmt.a ../../lib/libmimalloc.a -lpthread -lrt -latomic 

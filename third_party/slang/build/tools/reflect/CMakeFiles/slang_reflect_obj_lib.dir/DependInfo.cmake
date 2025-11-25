@@ -1,0 +1,28 @@
+
+# Consider dependencies only in project.
+set(CMAKE_DEPENDS_IN_PROJECT_ONLY OFF)
+
+# The set of languages for which implicit dependencies are needed:
+set(CMAKE_DEPENDS_LANGUAGES
+  )
+
+# The set of dependency files which are needed:
+set(CMAKE_DEPENDS_DEPENDENCY_FILES
+  "/home/dmitrii/visetog/verible/third_party/slang/tools/reflect/src/SvEnum.cpp" "tools/reflect/CMakeFiles/slang_reflect_obj_lib.dir/src/SvEnum.cpp.o" "gcc" "tools/reflect/CMakeFiles/slang_reflect_obj_lib.dir/src/SvEnum.cpp.o.d"
+  "/home/dmitrii/visetog/verible/third_party/slang/tools/reflect/src/SvLocalParam.cpp" "tools/reflect/CMakeFiles/slang_reflect_obj_lib.dir/src/SvLocalParam.cpp.o" "gcc" "tools/reflect/CMakeFiles/slang_reflect_obj_lib.dir/src/SvLocalParam.cpp.o.d"
+  "/home/dmitrii/visetog/verible/third_party/slang/tools/reflect/src/SvStruct.cpp" "tools/reflect/CMakeFiles/slang_reflect_obj_lib.dir/src/SvStruct.cpp.o" "gcc" "tools/reflect/CMakeFiles/slang_reflect_obj_lib.dir/src/SvStruct.cpp.o.d"
+  "/home/dmitrii/visetog/verible/third_party/slang/tools/reflect/src/SvType.cpp" "tools/reflect/CMakeFiles/slang_reflect_obj_lib.dir/src/SvType.cpp.o" "gcc" "tools/reflect/CMakeFiles/slang_reflect_obj_lib.dir/src/SvType.cpp.o.d"
+  "/home/dmitrii/visetog/verible/third_party/slang/tools/reflect/src/SvTypeReflector.cpp" "tools/reflect/CMakeFiles/slang_reflect_obj_lib.dir/src/SvTypeReflector.cpp.o" "gcc" "tools/reflect/CMakeFiles/slang_reflect_obj_lib.dir/src/SvTypeReflector.cpp.o.d"
+  "/home/dmitrii/visetog/verible/third_party/slang/tools/reflect/src/SvUnion.cpp" "tools/reflect/CMakeFiles/slang_reflect_obj_lib.dir/src/SvUnion.cpp.o" "gcc" "tools/reflect/CMakeFiles/slang_reflect_obj_lib.dir/src/SvUnion.cpp.o.d"
+  )
+
+# Targets to which this target links which contain Fortran sources.
+set(CMAKE_Fortran_TARGET_LINKED_INFO_FILES
+  )
+
+# Targets to which this target links which contain Fortran sources.
+set(CMAKE_Fortran_TARGET_FORWARD_LINKED_INFO_FILES
+  )
+
+# Fortran module output directory.
+set(CMAKE_Fortran_TARGET_MODULE_DIR "")

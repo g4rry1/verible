@@ -1,0 +1,3 @@
+# Hashes of file build rules.
+bcdf1f6c2966ab331ae549ba3f6cd9ff source/slang/diagnostics/AllDiags.h
+5413eb7e6fa8636a6fbe2357a003639c source/slang/syntax/AllSyntax.h
